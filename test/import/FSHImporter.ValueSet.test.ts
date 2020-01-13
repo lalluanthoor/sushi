@@ -4,10 +4,25 @@ import {
 } from '../testhelpers/asserts';
 import { loggerSpy } from '../testhelpers/loggerSpy';
 import { FshCode, VsOperator } from '../../src/fshtypes';
-import { importSingleText } from '../testhelpers/importSingleText';
+import { importSingleTextFn } from '../testhelpers/importSingleText';
+import { FHIRDefinitions, loadFromPath } from '../../src/fhirdefs';
+import path from 'path';
 
 describe('FSHImporter', () => {
   describe('ValueSet', () => {
+    let defs: FHIRDefinitions;
+    let importSingleText: ReturnType<typeof importSingleTextFn>;
+
+    beforeAll(() => {
+      defs = new FHIRDefinitions();
+      loadFromPath(
+        path.join(__dirname, '..', 'testhelpers', 'testdefs', 'package'),
+        'testPackage',
+        defs
+      );
+      importSingleText = importSingleTextFn(defs);
+    });
+
     describe('#vsMetadata', () => {
       it('should parse a value set with additional metadata', () => {
         const input = `
@@ -146,6 +161,39 @@ describe('FSHImporter', () => {
           startColumn: 9,
           endLine: 5,
           endColumn: 43
+        });
+        expect(valueSet.sourceInfo.file).toBe('Zoo.fsh');
+      });
+
+      it('should parse a value set with a concept specified from an FHIR-defined system', () => {
+        const input = `
+        ValueSet: AnimalAllergyVS
+        * #active "Active" from system allergyintolerance-clinical
+        `;
+
+        const result = importSingleText(input, 'Zoo.fsh');
+        expect(result.valueSets.size).toBe(1);
+        const valueSet = result.valueSets.get('AnimalAllergyVS');
+        expect(valueSet.components.length).toBe(1);
+        assertValueSetConceptComponent(
+          valueSet.components[0],
+          'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical',
+          undefined,
+          [
+            new FshCode(
+              'active',
+              'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical',
+              'Active'
+            )
+              .withLocation([3, 11, 3, 26])
+              .withFile('Zoo.fsh')
+          ]
+        );
+        expect(valueSet.sourceInfo.location).toEqual({
+          startLine: 2,
+          startColumn: 9,
+          endLine: 3,
+          endColumn: 66
         });
         expect(valueSet.sourceInfo.file).toBe('Zoo.fsh');
       });
@@ -343,6 +391,30 @@ describe('FSHImporter', () => {
           startColumn: 9,
           endLine: 5,
           endColumn: 32
+        });
+        expect(valueSet.sourceInfo.file).toBe('Zoo.fsh');
+      });
+
+      it('should parse a value set that includes all codes from a FHIR-defined value set', () => {
+        const input = `
+        ValueSet: AnimalAllergyVS
+        * codes from valueset allergyintolerance-clinical
+        `;
+        const result = importSingleText(input, 'Zoo.fsh');
+        expect(result.valueSets.size).toBe(1);
+        const valueSet = result.valueSets.get('AnimalAllergyVS');
+        expect(valueSet.components.length).toBe(1);
+        assertValueSetFilterComponent(
+          valueSet.components[0],
+          undefined,
+          ['http://hl7.org/fhir/ValueSet/allergyintolerance-clinical'],
+          []
+        );
+        expect(valueSet.sourceInfo.location).toEqual({
+          startLine: 2,
+          startColumn: 9,
+          endLine: 3,
+          endColumn: 57
         });
         expect(valueSet.sourceInfo.file).toBe('Zoo.fsh');
       });

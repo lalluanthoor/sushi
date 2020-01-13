@@ -975,21 +975,25 @@ export class FSHImporter extends FSHVisitor {
   visitVsComponentFrom(ctx: pc.VsComponentFromContext): ValueSetComponentFrom {
     const from: ValueSetComponentFrom = {};
     if (ctx.vsFromSystem()) {
-      from.system = this.aliasAwareValue(
+      from.system = this.normalizedValue(
         ctx
           .vsFromSystem()
           .SEQUENCE()
-          .getText()
+          .getText(),
+        EntityType.Alias,
+        EntityType.CodeSystem
       );
     }
     if (ctx.vsFromValueset()) {
       if (ctx.vsFromValueset().SEQUENCE()) {
         from.valueSets = [
-          this.aliasAwareValue(
+          this.normalizedValue(
             ctx
               .vsFromValueset()
               .SEQUENCE()
-              .getText()
+              .getText(),
+            EntityType.Alias,
+            EntityType.ValueSet
           )
         ];
       } else if (ctx.vsFromValueset().COMMA_DELIMITED_SEQUENCES()) {
@@ -998,7 +1002,9 @@ export class FSHImporter extends FSHVisitor {
           .COMMA_DELIMITED_SEQUENCES()
           .getText()
           .split(',')
-          .map(fromVs => this.aliasAwareValue(fromVs.trim()));
+          .map(fromVs =>
+            this.normalizedValue(fromVs.trim(), EntityType.Alias, EntityType.ValueSet)
+          );
       }
     }
     return from;

@@ -510,6 +510,24 @@ describe('FSHImporter', () => {
         );
       });
 
+      it('should substitute value set names/ids for value set URLs from FHIR-defined value sets', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: Observation
+        * code from allergyintolerance-clinical (extensible)
+        `;
+
+        const result = importSingleText(input);
+        const profile = result.profiles.get('ObservationProfile');
+        expect(profile.rules).toHaveLength(1);
+        assertValueSetRule(
+          profile.rules[0],
+          'code',
+          'http://hl7.org/fhir/ValueSet/allergyintolerance-clinical',
+          'extensible'
+        );
+      });
+
       it('should parse value set rules w/ no strength and default to required', () => {
         const input = `
         Profile: ObservationProfile
