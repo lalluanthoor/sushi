@@ -21,8 +21,10 @@ describe('#loadFromPath()', () => {
     resolve('Condition');
     resolve('boolean');
     resolve('Address');
+    resolve('vitalsigns');
     resolve('patient-mothersMaidenName');
     resolve('allergyintolerance-clinical');
+    resolve('allergyintolerance-verification');
   });
 
   it('should load base FHIR resources', () => {
@@ -51,6 +53,16 @@ describe('#loadFromPath()', () => {
     expect(defs.findType('http://hl7.org/fhir/StructureDefinition/Address')).toEqual(addressByID);
   });
 
+  it('should load base FHIR profiles', () => {
+    expect(defs.allProfiles().some(r => r.id === 'vitalsigns')).toBeTruthy();
+    const vitalSignsByID = defs.findProfile('vitalsigns');
+    expect(vitalSignsByID.url).toBe('http://hl7.org/fhir/StructureDefinition/vitalsigns');
+    expect(vitalSignsByID.fhirVersion).toBe('4.0.1');
+    expect(defs.findProfile('http://hl7.org/fhir/StructureDefinition/vitalsigns')).toEqual(
+      vitalSignsByID
+    );
+  });
+
   it('should load base FHIR extensions', () => {
     expect(defs.allExtensions().some(r => r.id === 'patient-mothersMaidenName')).toBeTruthy();
     const maidenNameExtensionByID = defs.findExtension('patient-mothersMaidenName');
@@ -77,6 +89,22 @@ describe('#loadFromPath()', () => {
     );
   });
 
+  it('should load base FHIR code sytems', () => {
+    // Surprise!  It turns out that the AllergyIntolerance status value set and code system
+    // have the same ID!
+    expect(defs.allCodeSystems().some(r => r.id === 'allergyintolerance-clinical')).toBeTruthy();
+    const allergyStatusCodeSystemByID = defs.findCodeSystem('allergyintolerance-clinical');
+    expect(allergyStatusCodeSystemByID.url).toBe(
+      'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical'
+    );
+    // For some reason, code systems don't specify a fhirVersion, but in this case the business
+    // version is the FHIR version, so we'll verify that instead
+    expect(allergyStatusCodeSystemByID.version).toBe('4.0.1');
+    expect(
+      defs.findCodeSystem('http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical')
+    ).toEqual(allergyStatusCodeSystemByID);
+  });
+
   it('should globally find any definition', () => {
     const conditionByID = defs.find('Condition');
     expect(conditionByID.kind).toBe('resource');
@@ -100,6 +128,8 @@ describe('#loadFromPath()', () => {
       maidenNameExtensionByID
     );
 
+    // NOTE: There are two things with id allergyintolerance-clinical (the ValueSet and CodeSystem)
+    // When doing a non-type-specific search, we favor the ValueSet
     const allergyStatusValueSetByID = defs.find('allergyintolerance-clinical');
     expect(allergyStatusValueSetByID.resourceType).toBe('ValueSet');
     // For some reason, value sets don't specify a fhirVersion, but in this case the business
@@ -108,6 +138,15 @@ describe('#loadFromPath()', () => {
     expect(defs.find('http://hl7.org/fhir/ValueSet/allergyintolerance-clinical')).toEqual(
       allergyStatusValueSetByID
     );
+
+    const allergyVerificationCodeSystemtByID = defs.find('allergyintolerance-verification');
+    expect(allergyVerificationCodeSystemtByID.resourceType).toBe('CodeSystem');
+    // For some reason, code systems don't specify a fhirVersion, but in this case the business
+    // version is the FHIR version, so we'll verify that instead
+    expect(allergyVerificationCodeSystemtByID.version).toBe('4.0.1');
+    expect(
+      defs.find('http://terminology.hl7.org/CodeSystem/allergyintolerance-verification')
+    ).toEqual(allergyVerificationCodeSystemtByID);
   });
 });
 

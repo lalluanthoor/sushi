@@ -5,6 +5,7 @@ import { FSHErrorListener } from './FSHErrorListener';
 import { FSHVisitor } from './generated/FSHVisitor';
 import { FSHLexer } from './generated/FSHLexer';
 import { FSHParser } from './generated/FSHParser';
+import { FHIRDefinitions } from '../fhirdefs';
 import {
   Config,
   Profile,
@@ -81,7 +82,9 @@ enum EntityType {
   Extension,
   ValueSet,
   CodeSystem,
-  Instance
+  Instance,
+  Resource, // NOTE: only defined in FHIR defs, not FSHTanks
+  Type // NOTE: only defined in FHIR defs, not FSHTanks
 }
 
 /**
@@ -114,7 +117,10 @@ class PreprocessedData {
       case EntityType.Instance:
         return this.instances;
       default:
-        // this should never happen, but just to be safe...
+        // NOTE: the following are not defined in FSH, so only exist in FHIRDefinitions:
+        // - EntityType.Resource
+        // - EntityType.Type
+        // In this case, just return an empty map since nothing can/will be found in the FSHTank.
         return new Map();
     }
   }
@@ -140,12 +146,14 @@ class PreprocessedData {
  * we must call the explicit visitX functions.
  */
 export class FSHImporter extends FSHVisitor {
+  private readonly fhirDefs: FHIRDefinitions;
   private currentFile: string;
   private currentDoc: FSHDocument;
   private preprocessedData: PreprocessedData;
 
-  constructor() {
+  constructor(fhirDefs: FHIRDefinitions) {
     super();
+    this.fhirDefs = fhirDefs;
   }
 
   import(rawFSHes: RawFSH[], config: Config): FSHDocument[] {
@@ -460,9 +468,11 @@ export class FSHImporter extends FSHVisitor {
   visitParent(ctx: pc.ParentContext): string {
     return this.normalizedValue(
       ctx.SEQUENCE().getText(),
+      EntityType.Alias,
       EntityType.Profile,
       EntityType.Extension,
-      EntityType.Alias
+      EntityType.Resource,
+      EntityType.Type
     );
   }
 
@@ -482,9 +492,11 @@ export class FSHImporter extends FSHVisitor {
   visitInstanceOf(ctx: pc.InstanceOfContext): string {
     return this.normalizedValue(
       ctx.SEQUENCE().getText(),
+      EntityType.Alias,
       EntityType.Profile,
       EntityType.Extension,
-      EntityType.Alias
+      EntityType.Resource,
+      EntityType.Type
     );
   }
 
@@ -689,7 +701,7 @@ export class FSHImporter extends FSHVisitor {
       .withLocation(this.extractStartStop(ctx))
       .withFile(this.currentFile);
     if (system && system.length > 0) {
-      concept.system = this.normalizedValue(system, EntityType.Alias /*, EntityType.CodeSystem*/);
+      concept.system = this.normalizedValue(system, EntityType.Alias, EntityType.CodeSystem);
     }
     if (ctx.STRING()) {
       concept.display = this.extractString(ctx.STRING());
@@ -732,8 +744,16 @@ export class FSHImporter extends FSHVisitor {
 
   visitReference(ctx: pc.ReferenceContext): FshReference {
     const ref = new FshReference(
-      // Reference could technically be to near anything, so allow all types
-      this.normalizedValue(this.parseReference(ctx.REFERENCE().getText())[0])
+      this.normalizedValue(
+        this.parseReference(ctx.REFERENCE().getText())[0],
+        EntityType.Alias,
+        EntityType.Profile,
+        EntityType.Extension,
+        EntityType.ValueSet,
+        EntityType.CodeSystem,
+        EntityType.Instance
+        // purposefully exclude Resource and Type -- we don't want URLs for those
+      )
     )
       .withLocation(this.extractStartStop(ctx))
       .withFile(this.currentFile);
@@ -1055,17 +1075,56 @@ export class FSHImporter extends FSHVisitor {
     }
   }
 
+  /**
+   * Normalizes a name or id to a defining URL, optionally allowing a list of allowed types
+   * to be passed in.
+   * @param value - the value to normalize to a URL
+   * @param types - the allowed types to resolve to
+   */
   private normalizedValue(value: string, ...types: EntityType[]): string {
+    // When no types are passed, it's essentially a global search for *anything*
     if (types.length === 0) {
-      return this.preprocessedData.all.get(value) ?? value;
+      return this.preprocessedData.all.get(value) ?? this.fhirDefs.find(value) ?? value;
     }
+    // First look at the local definitions in the FSH Tank
     for (const type of types) {
       const typeMap = this.preprocessedData.forType(type);
       if (typeMap.has(value)) {
         return typeMap.get(value);
       }
     }
-    // If we fell through, that means there was no match, so return back the value
+    // Then look at the FHIR definitions (external spec and IGs).
+    // This intentionally prefers local definitions over external ones.
+    for (const type of types) {
+      let def;
+      switch (type) {
+        case EntityType.Resource:
+          def = this.fhirDefs.findResource(value);
+          break;
+        case EntityType.Type:
+          def = this.fhirDefs.findType(value);
+          break;
+        case EntityType.Profile:
+          def = this.fhirDefs.findProfile(value);
+          break;
+        case EntityType.Extension:
+          def = this.fhirDefs.findExtension(value);
+          break;
+        case EntityType.ValueSet:
+          def = this.fhirDefs.findValueSet(value);
+          break;
+        case EntityType.CodeSystem:
+          def = this.fhirDefs.findCodeSystem(value);
+          break;
+        case EntityType.Instance: // don't support resolving to FHIR examples
+        default:
+          break;
+      }
+      if (def && def.url) {
+        return def.url;
+      }
+    }
+    // If we got here, just return back the value
     return value;
   }
 

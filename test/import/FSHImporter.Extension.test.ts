@@ -6,10 +6,25 @@ import {
   assertCaretValueRule
 } from '../testhelpers/asserts';
 import { loggerSpy } from '../testhelpers/loggerSpy';
-import { importSingleText } from '../testhelpers/importSingleText';
+import { importSingleTextFn } from '../testhelpers/importSingleText';
+import { FHIRDefinitions, loadFromPath } from '../../src/fhirdefs';
+import path from 'path';
 
 describe('FSHImporter', () => {
   describe('Extension', () => {
+    let defs: FHIRDefinitions;
+    let importSingleText: ReturnType<typeof importSingleTextFn>;
+
+    beforeAll(() => {
+      defs = new FHIRDefinitions();
+      loadFromPath(
+        path.join(__dirname, '..', 'testhelpers', 'testdefs', 'package'),
+        'testPackage',
+        defs
+      );
+      importSingleText = importSingleTextFn(defs);
+    });
+
     describe('#sdMetadata', () => {
       it('should parse the simplest possible extension', () => {
         const input = `

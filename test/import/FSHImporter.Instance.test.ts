@@ -1,10 +1,25 @@
 import { assertFixedValueRule } from '../testhelpers/asserts';
 import { FshCode } from '../../src/fshtypes';
 import { loggerSpy } from '../testhelpers/loggerSpy';
-import { importSingleText } from '../testhelpers/importSingleText';
+import { importSingleTextFn } from '../testhelpers/importSingleText';
+import { FHIRDefinitions, loadFromPath } from '../../src/fhirdefs';
+import path from 'path';
 
 describe('FSHImporter', () => {
   describe('Instance', () => {
+    let defs: FHIRDefinitions;
+    let importSingleText: ReturnType<typeof importSingleTextFn>;
+
+    beforeAll(() => {
+      defs = new FHIRDefinitions();
+      loadFromPath(
+        path.join(__dirname, '..', 'testhelpers', 'testdefs', 'package'),
+        'testPackage',
+        defs
+      );
+      importSingleText = importSingleTextFn(defs);
+    });
+
     describe('#instanceOf', () => {
       it('should parse the simplest possible instance', () => {
         const input = `
@@ -16,7 +31,7 @@ describe('FSHImporter', () => {
         expect(result.instances.size).toBe(1);
         const instance = result.instances.get('MyObservation');
         expect(instance.name).toBe('MyObservation');
-        expect(instance.instanceOf).toBe('Observation');
+        expect(instance.instanceOf).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
         expect(instance.title).toBeUndefined();
         expect(instance.rules.length).toBe(0);
         expect(instance.sourceInfo.location).toEqual({
@@ -30,7 +45,7 @@ describe('FSHImporter', () => {
 
       it('should parse an instance with an aliased type', () => {
         const input = `
-        Alias: obs = Observation
+        Alias: obs = http://hl7.org/fhir/StructureDefinition/Observation
         Instance: MyObservation
         InstanceOf: obs
         `;
@@ -38,7 +53,7 @@ describe('FSHImporter', () => {
         const result = importSingleText(input);
         expect(result.instances.size).toBe(1);
         const instance = result.instances.get('MyObservation');
-        expect(instance.instanceOf).toBe('Observation');
+        expect(instance.instanceOf).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
       });
 
       it('should not parse an instance that has no type', () => {
@@ -65,7 +80,7 @@ describe('FSHImporter', () => {
         expect(result.instances.size).toBe(1);
         const instance = result.instances.get('MyObservation');
         expect(instance.name).toBe('MyObservation');
-        expect(instance.instanceOf).toBe('Observation');
+        expect(instance.instanceOf).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
         expect(instance.title).toBe('My Important Observation');
       });
     });
@@ -109,7 +124,7 @@ describe('FSHImporter', () => {
         expect(result.instances.size).toBe(1);
         const instance = result.instances.get('MyObservation');
         expect(instance.name).toBe('MyObservation');
-        expect(instance.instanceOf).toBe('Observation');
+        expect(instance.instanceOf).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
         expect(instance.title).toBe('My Important Observation');
       });
 

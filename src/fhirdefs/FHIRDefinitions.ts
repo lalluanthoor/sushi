@@ -4,33 +4,36 @@
 import cloneDeep from 'lodash/cloneDeep';
 
 export class FHIRDefinitions {
-  private extensions: Map<string, any>;
   private resources: Map<string, any>;
+  private profiles: Map<string, any>;
+  private extensions: Map<string, any>;
   private types: Map<string, any>;
   private valueSets: Map<string, any>;
+  private codeSystems: Map<string, any>;
   packages: string[];
 
   constructor() {
     this.packages = [];
-    this.extensions = new Map();
     this.resources = new Map();
+    this.profiles = new Map();
+    this.extensions = new Map();
     this.types = new Map();
     this.valueSets = new Map();
+    this.codeSystems = new Map();
   }
 
   size(): number {
-    return this.extensions.size + this.resources.size + this.types.size + this.valueSets.size;
+    return (
+      this.resources.size +
+      this.profiles.size +
+      this.extensions.size +
+      this.types.size +
+      this.valueSets.size +
+      this.codeSystems.size
+    );
   }
 
   // NOTE: These all return clones of the JSON to prevent the source values from being overwritten
-
-  allExtensions(): any[] {
-    return cloneJsonMapValues(this.extensions);
-  }
-
-  findExtension(url: string): any {
-    return cloneDeep(this.extensions.get(url));
-  }
 
   allResources(): any[] {
     return cloneJsonMapValues(this.resources);
@@ -38,6 +41,22 @@ export class FHIRDefinitions {
 
   findResource(name: string): any {
     return cloneDeep(this.resources.get(name));
+  }
+
+  allProfiles(): any[] {
+    return cloneJsonMapValues(this.profiles);
+  }
+
+  findProfile(url: string): any {
+    return cloneDeep(this.profiles.get(url));
+  }
+
+  allExtensions(): any[] {
+    return cloneJsonMapValues(this.extensions);
+  }
+
+  findExtension(url: string): any {
+    return cloneDeep(this.extensions.get(url));
   }
 
   allTypes(): any[] {
@@ -56,22 +75,34 @@ export class FHIRDefinitions {
     return cloneDeep(this.valueSets.get(name));
   }
 
+  allCodeSystems(): any[] {
+    return cloneJsonMapValues(this.codeSystems);
+  }
+
+  findCodeSystem(name: string): any {
+    return cloneDeep(this.codeSystems.get(name));
+  }
+
   find(key: string): any {
     if (this.resources.has(key)) {
       return this.findResource(key);
-    } else if (this.types.has(key)) {
-      return this.findType(key);
+    } else if (this.profiles.has(key)) {
+      return this.findProfile(key);
     } else if (this.extensions.has(key)) {
       return this.findExtension(key);
-    } else {
+    } else if (this.types.has(key)) {
+      return this.findType(key);
+    } else if (this.valueSets.has(key)) {
       return this.findValueSet(key);
+    } else {
+      return this.findCodeSystem(key);
     }
   }
 
   add(definition: any): void {
     if (
-      definition.type == 'Extension' &&
-      definition.baseDefinition != 'http://hl7.org/fhir/StructureDefinition/Element'
+      definition.type === 'Extension' &&
+      definition.baseDefinition !== 'http://hl7.org/fhir/StructureDefinition/Element'
     ) {
       addDefinitionToMap(definition, this.extensions);
     } else if (
@@ -80,10 +111,16 @@ export class FHIRDefinitions {
       definition.kind === 'datatype'
     ) {
       addDefinitionToMap(definition, this.types);
-    } else if (definition.kind == 'resource') {
-      addDefinitionToMap(definition, this.resources);
-    } else if (definition.resourceType == 'ValueSet') {
+    } else if (definition.kind === 'resource') {
+      if (definition.derivation === 'constraint') {
+        addDefinitionToMap(definition, this.profiles);
+      } else {
+        addDefinitionToMap(definition, this.resources);
+      }
+    } else if (definition.resourceType === 'ValueSet') {
       addDefinitionToMap(definition, this.valueSets);
+    } else if (definition.resourceType === 'CodeSystem') {
+      addDefinitionToMap(definition, this.codeSystems);
     }
     // TODO: CodeSystems? Other things?
   }

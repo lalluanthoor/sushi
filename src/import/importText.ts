@@ -2,6 +2,7 @@ import { FSHImporter } from './FSHImporter';
 import { FSHDocument } from './FSHDocument';
 import { RawFSH } from './RawFSH';
 import { Config } from '../fshtypes/Config';
+import { FHIRDefinitions } from '../fhirdefs';
 
 /**
  * Parses various text strings into individual FSHDocuments.
@@ -9,8 +10,12 @@ import { Config } from '../fshtypes/Config';
  * @param {Config} config - the project configuration
  * @returns {FSHDocument[]} - the FSH documents representing each parsed text
  */
-export function importText(rawFSHes: RawFSH[], config: Config): FSHDocument[] {
-  const importer = new FSHImporter();
+export function importText(
+  rawFSHes: RawFSH[],
+  config: Config,
+  fhirDefs: FHIRDefinitions
+): FSHDocument[] {
+  const importer = new FSHImporter(fhirDefs);
 
   return importer.import(rawFSHes, config);
 }

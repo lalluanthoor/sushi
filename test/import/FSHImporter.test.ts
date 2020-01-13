@@ -3,6 +3,7 @@ import { loggerSpy } from '../testhelpers/loggerSpy';
 import { FshCode } from '../../src/fshtypes';
 import { assertFixedValueRule } from '../testhelpers/asserts';
 import { importSingleText } from '../testhelpers/importSingleText';
+import { FHIRDefinitions } from '../../src/fhirdefs';
 
 describe('FSHImporter', () => {
   it('should default filename to blank string', () => {
@@ -78,7 +79,11 @@ describe('FSHImporter', () => {
   it('should allow two FSH documents', () => {
     const input = '';
     const input2 = '';
-    const results = importText([new RawFSH(input), new RawFSH(input2)]);
+    const results = importText(
+      [new RawFSH(input), new RawFSH(input2)],
+      { name: 'test', canonical: 'http://example/org', version: '0.0.1' },
+      new FHIRDefinitions()
+    );
     expect(results.length).toBe(2);
     expect(results[0].aliases.size).toBe(0);
     expect(results[0].profiles.size).toBe(0);
@@ -91,7 +96,11 @@ describe('FSHImporter', () => {
   it('should allow two FSH documents even when first is invalid', () => {
     const input = 'invalid FSH string';
     const input2 = '';
-    const results = importText([new RawFSH(input, 'Invalid.fsh'), new RawFSH(input2, 'Blank.fsh')]);
+    const results = importText(
+      [new RawFSH(input, 'Invalid.fsh'), new RawFSH(input2, 'Blank.fsh')],
+      { name: 'test', canonical: 'http://example/org', version: '0.0.1' },
+      new FHIRDefinitions()
+    );
     expect(results.length).toBe(2);
     expect(results[0].aliases.size).toBe(0);
     expect(results[0].profiles.size).toBe(0);

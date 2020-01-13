@@ -8,12 +8,29 @@ import {
   assertCaretValueRule
 } from '../testhelpers/asserts';
 import { FshCode, FshQuantity, FshRatio, FshReference } from '../../src/fshtypes';
+import { FHIRDefinitions, loadFromPath } from '../../src/fhirdefs';
 import { loggerSpy } from '../testhelpers/loggerSpy';
-import { importSingleText } from '../testhelpers/importSingleText';
-import { importMultipleText } from '../testhelpers/importMultipleText';
+import { importSingleTextFn } from '../testhelpers/importSingleText';
+import { importMultipleTextFn } from '../testhelpers/importMultipleText';
+import path from 'path';
 
 describe('FSHImporter', () => {
   describe('Profile', () => {
+    let defs: FHIRDefinitions;
+    let importSingleText: ReturnType<typeof importSingleTextFn>;
+    let importMultipleText: ReturnType<typeof importMultipleTextFn>;
+
+    beforeAll(() => {
+      defs = new FHIRDefinitions();
+      loadFromPath(
+        path.join(__dirname, '..', 'testhelpers', 'testdefs', 'package'),
+        'testPackage',
+        defs
+      );
+      importSingleText = importSingleTextFn(defs);
+      importMultipleText = importMultipleTextFn(defs);
+    });
+
     describe('#sdMetadata', () => {
       it('should parse the simplest possible profile', () => {
         const input = `
@@ -25,7 +42,7 @@ describe('FSHImporter', () => {
         expect(result.profiles.size).toBe(1);
         const profile = result.profiles.get('ObservationProfile');
         expect(profile.name).toBe('ObservationProfile');
-        expect(profile.parent).toBe('Observation');
+        expect(profile.parent).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
         // if no id is explicitly set, should default to name
         expect(profile.id).toBe('ObservationProfile');
         expect(profile.sourceInfo.location).toEqual({
@@ -50,7 +67,7 @@ describe('FSHImporter', () => {
         expect(result.profiles.size).toBe(1);
         const profile = result.profiles.get('ObservationProfile');
         expect(profile.name).toBe('ObservationProfile');
-        expect(profile.parent).toBe('Observation');
+        expect(profile.parent).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
         expect(profile.id).toBe('observation-profile');
         expect(profile.title).toBe('An Observation Profile');
         expect(profile.description).toBe('A profile on Observation');

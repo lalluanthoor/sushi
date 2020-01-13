@@ -58,6 +58,7 @@ async function app() {
       })
     );
   }
+  await Promise.all(dependencyDefs);
 
   const rawFSHes = files
     .filter(file => file.endsWith('.fsh'))
@@ -66,11 +67,8 @@ async function app() {
       const fileContent = fs.readFileSync(filePath, 'utf8');
       return new RawFSH(fileContent, filePath);
     });
-
-  const docs = importText(rawFSHes, config);
-
+  const docs = importText(rawFSHes, config, defs);
   const tank = new FSHTank(docs, config);
-  await Promise.all(dependencyDefs);
   const outPackage = exportFHIR(tank, defs);
 
   fs.ensureDirSync(program.out);
