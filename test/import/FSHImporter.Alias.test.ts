@@ -1,6 +1,6 @@
-import { importText, RawFSH } from '../../src/import';
 import { ValueSetRule } from '../../src/fshtypes/rules';
 import { importSingleText } from '../testhelpers/importSingleText';
+import { importMultipleText } from '../testhelpers/importMultipleText';
 
 // Aliases are tested as part of the other entity tests where aliases are allowed
 // but these tests ensure that aliases work generally and can be in any order
@@ -83,7 +83,7 @@ describe('FSHImporter', () => {
       Alias: LOINC = http://loinc.org
       `;
 
-      const results = importText([new RawFSH(input), new RawFSH(input2)]);
+      const results = importMultipleText([input, input2]);
       expect(results.length).toBe(2);
       const rule = results[0].profiles.get('ObservationProfile').rules[0] as ValueSetRule;
       expect(rule.valueSet).toBe('http://loinc.org');

@@ -10,6 +10,7 @@ import {
 import { FshCode, FshQuantity, FshRatio, FshReference } from '../../src/fshtypes';
 import { loggerSpy } from '../testhelpers/loggerSpy';
 import { importSingleText } from '../testhelpers/importSingleText';
+import { importMultipleText } from '../testhelpers/importMultipleText';
 
 describe('FSHImporter', () => {
   describe('Profile', () => {
@@ -113,6 +114,48 @@ describe('FSHImporter', () => {
         const profile = result.profiles.get('ObservationProfile');
         expect(profile.name).toBe('ObservationProfile');
         expect(profile.parent).toBe('http://hl7.org/fhir/StructureDefinition/Observation');
+      });
+
+      it('should substitute FSHy parent name/id with URL for parent in same file', () => {
+        const input = `
+        Profile: GrandchildObservation
+        Parent: ChildObservation
+
+        Profile: ChildObservation
+        Parent: mom
+
+        Profile: ParentObservation
+        Id: mom
+        Parent: Observation
+        `;
+
+        const result = importSingleText(input);
+        expect(result.profiles.size).toBe(3);
+        // test name replacement
+        let profile = result.profiles.get('GrandchildObservation');
+        expect(profile.parent).toBe('http://example.org/StructureDefinition/ChildObservation');
+        // test id replacement
+        profile = result.profiles.get('ChildObservation');
+        expect(profile.parent).toBe('http://example.org/StructureDefinition/mom');
+      });
+
+      it('should substitute FSHy parent name with URL for parent in different file', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: ParentObservation
+        `;
+
+        const input2 = `
+        Profile: ParentObservation
+        Parent: Observation
+        `;
+
+        const results = importMultipleText([input, input2]);
+        expect(results.length).toBe(2);
+        expect(results[0].profiles.size).toBe(1);
+        const profile = results[0].profiles.get('ObservationProfile');
+        expect(profile.name).toBe('ObservationProfile');
+        expect(profile.parent).toBe('http://example.org/StructureDefinition/ParentObservation');
       });
 
       it('should only apply each metadata attribute the first time it is declared', () => {
@@ -385,6 +428,68 @@ describe('FSHImporter', () => {
           'component.code',
           'http://example.org/fhir/ValueSet/ComponentCodeValueSet',
           'example'
+        );
+      });
+
+      it('should substitute value set names/ids for value set URLs in the same file', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: Observation
+        * category from CategoryValueSet (required)
+        * code from CodeValueSet (extensible)
+
+        ValueSet: CategoryValueSet
+
+        ValueSet: CodeValueSet
+        Id: code-vs
+        `;
+
+        const result = importSingleText(input);
+        const profile = result.profiles.get('ObservationProfile');
+        expect(profile.rules).toHaveLength(2);
+        assertValueSetRule(
+          profile.rules[0],
+          'category',
+          'http://example.org/ValueSet/CategoryValueSet',
+          'required'
+        );
+        assertValueSetRule(
+          profile.rules[1],
+          'code',
+          'http://example.org/ValueSet/code-vs',
+          'extensible'
+        );
+      });
+
+      it('should substitute value set names/ids for value set URLs in different files', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: Observation
+        * category from CategoryValueSet (required)
+        * code from CodeValueSet (extensible)
+        `;
+        const input2 = `
+        ValueSet: CategoryValueSet
+
+        ValueSet: CodeValueSet
+        Id: code-vs
+        `;
+
+        const result = importMultipleText([input, input2]);
+        expect(result.length).toBe(2);
+        const profile = result[0].profiles.get('ObservationProfile');
+        expect(profile.rules).toHaveLength(2);
+        assertValueSetRule(
+          profile.rules[0],
+          'category',
+          'http://example.org/ValueSet/CategoryValueSet',
+          'required'
+        );
+        assertValueSetRule(
+          profile.rules[1],
+          'code',
+          'http://example.org/ValueSet/code-vs',
+          'extensible'
         );
       });
 
@@ -691,6 +796,60 @@ describe('FSHImporter', () => {
         assertFixedValueRule(profile.rules[0], 'basedOn', expectedReference);
       });
 
+      it('should parse fixed value Reference rules and substitute FSHy names with URLs in the same file', () => {
+        // NOTE: This is probably a rare use-case (fixing a reference to a profile in another
+        // profile), but it is possible.
+        const input = `
+        Profile: ProcedureProfileParameterProfile
+        Parent: ParameterDefinition
+        * profile = Reference(ProcedureProfile) "Procedure Profile"
+
+        Profile: ProcedureProfile
+        Id: prc-profile
+        Parent: Procedure
+        `;
+
+        const result = importSingleText(input);
+        const profile = result.profiles.get('ProcedureProfileParameterProfile');
+        expect(profile.rules).toHaveLength(1);
+
+        const expectedProfileReference = new FshReference(
+          'http://example.org/StructureDefinition/prc-profile',
+          'Procedure Profile'
+        )
+          .withLocation([4, 21, 4, 67])
+          .withFile('');
+        assertFixedValueRule(profile.rules[0], 'profile', expectedProfileReference);
+      });
+
+      it('should parse fixed value Reference rules and substitute FSHy ids with URLs in different files', () => {
+        // NOTE: This is probably a rare use-case (fixing a reference to a profile in another
+        // profile), but it is possible.
+        const input = `
+        Profile: ProcedureProfileParameterProfile
+        Parent: ParameterDefinition
+        * profile = Reference(prc-profile) "Procedure Profile"
+        `;
+        const input2 = `
+        Profile: ProcedureProfile
+        Id: prc-profile
+        Parent: Procedure
+        `;
+
+        const result = importMultipleText([input, input2]);
+        expect(result.length).toBe(2);
+        const profile = result[0].profiles.get('ProcedureProfileParameterProfile');
+        expect(profile.rules).toHaveLength(1);
+
+        const expectedProfileReference = new FshReference(
+          'http://example.org/StructureDefinition/prc-profile',
+          'Procedure Profile'
+        )
+          .withLocation([4, 21, 4, 62])
+          .withFile('');
+        assertFixedValueRule(profile.rules[0], 'profile', expectedProfileReference);
+      });
+
       it('should parse fixed value Reference rule with a display string', () => {
         const input = `
 
@@ -795,6 +954,92 @@ describe('FSHImporter', () => {
           { type: 'string' },
           { type: 'http://hl7.org/fhir/StructureDefinition/Quantity' }
         );
+      });
+
+      it('should substitute FSHy names/ids with URLs for only types in the same file', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: Observation
+        * value[x] only CodeableProfile or string or qnt-profile
+
+        Profile: CodeableProfile
+        Id: cc-profile
+        Parent: CodeableConcept
+
+        Profile: QuantityProfile
+        Id: qnt-profile
+        Parent: Quantity
+        `;
+
+        const result = importSingleText(input);
+        const profile = result.profiles.get('ObservationProfile');
+        expect(profile.rules).toHaveLength(1);
+        assertOnlyRule(
+          profile.rules[0],
+          'value[x]',
+          { type: 'http://example.org/StructureDefinition/cc-profile' },
+          { type: 'string' },
+          { type: 'http://example.org/StructureDefinition/qnt-profile' }
+        );
+      });
+
+      it('should substitute FSHy names/ids with URLs for only types in different files', () => {
+        const input = `
+        Profile: ObservationProfile
+        Parent: Observation
+        * value[x] only CodeableProfile or string or qnt-profile
+        `;
+        const input2 = `
+        Profile: CodeableProfile
+        Id: cc-profile
+        Parent: CodeableConcept
+        `;
+        const input3 = `
+        Profile: QuantityProfile
+        Id: qnt-profile
+        Parent: Quantity
+        `;
+
+        const results = importMultipleText([input, input2, input3]);
+        expect(results.length).toBe(3);
+        const profile = results[0].profiles.get('ObservationProfile');
+        expect(profile.rules).toHaveLength(1);
+        assertOnlyRule(
+          profile.rules[0],
+          'value[x]',
+          { type: 'http://example.org/StructureDefinition/cc-profile' },
+          { type: 'string' },
+          { type: 'http://example.org/StructureDefinition/qnt-profile' }
+        );
+      });
+    });
+
+    it('should substitute FSHy references to names/ids with references to URLs for only types in the same file', () => {
+      const input = `
+      Profile: ObservationProfile
+      Parent: Observation
+      * basedOn only Reference(MRProfile)
+      * partOf only Reference(prc-profile)
+
+      Profile: MRProfile
+      Id: mr-profile
+      Parent: MedicationRequest
+
+      Profile: ProcedureProfile
+      Id: prc-profile
+      Parent: Procedure
+      `;
+
+      const result = importSingleText(input);
+      const profile = result.profiles.get('ObservationProfile');
+      expect(profile.rules).toHaveLength(2);
+      assertOnlyRule(profile.rules[0], 'basedOn', {
+        type: 'http://example.org/StructureDefinition/mr-profile',
+        isReference: true
+      });
+      assertOnlyRule(profile.rules[1], 'partOf', {
+        type: 'http://example.org/StructureDefinition/prc-profile',
+        isReference: true
       });
     });
 

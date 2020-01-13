@@ -95,6 +95,28 @@ describe('FSHImporter', () => {
         expect(loggerSpy.getMessageAtIndex(-2)).toMatch(/File: Dupe\.fsh.*Line: 7\D/s);
         expect(loggerSpy.getLastMessage()).toMatch(/File: Dupe\.fsh.*Line: 8\D/s);
       });
+
+      it('should substitute FSHy parent name/id with URL for parent', () => {
+        const input = `
+        Extension: GrandchildExtension
+        Parent: ChildExtension
+
+        Extension: ChildExtension
+        Parent: pop
+
+        Extension: ParentExtension
+        Id: pop
+        `;
+
+        const result = importSingleText(input);
+        expect(result.extensions.size).toBe(3);
+        // test name replacement
+        let ext = result.extensions.get('GrandchildExtension');
+        expect(ext.parent).toBe('http://example.org/StructureDefinition/ChildExtension');
+        // test id replacement
+        ext = result.extensions.get('ChildExtension');
+        expect(ext.parent).toBe('http://example.org/StructureDefinition/pop');
+      });
     });
 
     // Since Extensions use the same rule parsing code as Profiles, only do minimal tests of rules

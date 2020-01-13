@@ -6,6 +6,7 @@ import { FSHVisitor } from './generated/FSHVisitor';
 import { FSHLexer } from './generated/FSHLexer';
 import { FSHParser } from './generated/FSHParser';
 import {
+  Config,
   Profile,
   Extension,
   FshCode,
@@ -43,7 +44,6 @@ import {
   ValueSetFilterValueTypeError,
   ValueSetFilterMissingValueError
 } from '../errors';
-import flatMap from 'lodash/flatMap';
 import isEqual from 'lodash/isEqual';
 import sortBy from 'lodash/sortBy';
 
@@ -75,6 +75,63 @@ enum Flag {
   Unknown
 }
 
+enum EntityType {
+  Alias,
+  Profile,
+  Extension,
+  ValueSet,
+  CodeSystem,
+  Instance
+}
+
+/**
+ * Contains the data for translating FSH names, ids, and aliases to URLs.  This data is collected
+ * during a preprocessing step and used during import to substitute the names, ids, and aliases
+ * w/ their URLs since the FHIR definitions must use the identifying URLs when referring to other
+ * entities.
+ */
+class PreprocessedData {
+  aliases: Map<string, string> = new Map();
+  profiles: Map<string, string> = new Map();
+  extensions: Map<string, string> = new Map();
+  valueSets: Map<string, string> = new Map();
+  codeSystems: Map<string, string> = new Map();
+  instances: Map<string, string> = new Map();
+  all: Map<string, string> = new Map();
+
+  forType(type: EntityType): Map<string, string> {
+    switch (type) {
+      case EntityType.Alias:
+        return this.aliases;
+      case EntityType.Profile:
+        return this.profiles;
+      case EntityType.Extension:
+        return this.extensions;
+      case EntityType.ValueSet:
+        return this.valueSets;
+      case EntityType.CodeSystem:
+        return this.codeSystems;
+      case EntityType.Instance:
+        return this.instances;
+      default:
+        // this should never happen, but just to be safe...
+        return new Map();
+    }
+  }
+
+  register(name: string, value: string, type: EntityType) {
+    const typeMap = this.forType(type);
+    if (typeMap.has(name) && typeMap.get(name) !== value) {
+      // error
+    } else if (this.all.has(name) && this.all.get(name) !== value) {
+      // error
+    } else {
+      typeMap.set(name, value);
+      this.all.set(name, value);
+    }
+  }
+}
+
 /**
  * FSHImporter handles the parsing of FSH documents, constructing the data into FSH types.
  * FSHImporter uses a visitor pattern approach with some accomodations due to the ANTLR4
@@ -85,13 +142,13 @@ enum Flag {
 export class FSHImporter extends FSHVisitor {
   private currentFile: string;
   private currentDoc: FSHDocument;
-  private allAliases: Map<string, string>;
+  private preprocessedData: PreprocessedData;
 
   constructor() {
     super();
   }
 
-  import(rawFSHes: RawFSH[]): FSHDocument[] {
+  import(rawFSHes: RawFSH[], config: Config): FSHDocument[] {
     const docs: FSHDocument[] = [];
     const contexts: pc.DocContext[] = [];
     rawFSHes.forEach(rawFSH => {
@@ -99,20 +156,7 @@ export class FSHImporter extends FSHVisitor {
       contexts.push(this.parseDoc(rawFSH.content, rawFSH.path));
     });
 
-    // Import all aliases first
-    this.allAliases = new Map(
-      flatMap(
-        contexts.map((context, index) => {
-          this.currentDoc = docs[index];
-          this.currentFile = this.currentDoc.file ?? '';
-          const currentAliases = this.getAliases(context);
-          this.currentDoc = null;
-          this.currentFile = null;
-          return currentAliases;
-        }),
-        aliases => Array.from(aliases)
-      )
-    );
+    this.preprocess(contexts, config);
 
     contexts.forEach((context, index) => {
       this.currentDoc = docs[index];
@@ -125,14 +169,60 @@ export class FSHImporter extends FSHVisitor {
     return docs;
   }
 
-  getAliases(ctx: pc.DocContext): Map<string, string> {
-    ctx.entity().forEach(e => {
-      if (e.alias()) {
-        this.visitAlias(e.alias());
-      }
+  preprocess(contexts: pc.DocContext[], config: Config): void {
+    const data = new PreprocessedData();
+    contexts.forEach(ctx => {
+      ctx.entity().forEach(e => {
+        if (e.alias()) {
+          const [name, url] = e
+            .alias()
+            .SEQUENCE()
+            .map(s => s.getText());
+          data.register(name, url, EntityType.Alias);
+        }
+
+        if (e.profile() || e.extension()) {
+          const sd = e.profile() ?? e.extension();
+          const pName = sd.SEQUENCE().getText();
+          const pId = sd
+            .sdMetadata()
+            .find(sdMeta => sdMeta.id() != null)
+            ?.id()
+            .SEQUENCE()
+            .getText();
+          const url = `${config.canonical}/StructureDefinition/${pId ?? pName}`;
+          data.register(pName, url, e.profile() ? EntityType.Profile : EntityType.Extension);
+          if (pId != null && pId !== pName) {
+            data.register(pId, url, e.profile() ? EntityType.Profile : EntityType.Extension);
+          }
+        }
+
+        if (e.valueSet()) {
+          const vsName = e
+            .valueSet()
+            .SEQUENCE()
+            .getText();
+          const vsId = e
+            .valueSet()
+            .vsMetadata()
+            .find(vsMeta => vsMeta.id() != null)
+            ?.id()
+            .SEQUENCE()
+            .getText();
+          const url = `${config.canonical}/ValueSet/${vsId ?? vsName}`;
+          data.register(vsName, url, EntityType.ValueSet);
+          if (vsId != null && vsId !== vsName) {
+            data.register(vsId, url, EntityType.ValueSet);
+          }
+        }
+
+        // TODO: CodeSystem
+
+        // TODO: Instance
+      });
     });
 
-    return this.currentDoc.aliases;
+    this.preprocessedData = data;
   }
 
   visitDoc(ctx: pc.DocContext): void {
@@ -142,6 +232,10 @@ export class FSHImporter extends FSHVisitor {
   }
 
   visitEntity(ctx: pc.EntityContext): void {
+    if (ctx.alias()) {
+      this.visitAlias(ctx.alias());
+    }
+
     if (ctx.profile()) {
       this.visitProfile(ctx.profile());
     }
@@ -364,7 +458,12 @@ export class FSHImporter extends FSHVisitor {
   }
 
   visitParent(ctx: pc.ParentContext): string {
-    return this.aliasAwareValue(ctx.SEQUENCE().getText());
+    return this.normalizedValue(
+      ctx.SEQUENCE().getText(),
+      EntityType.Profile,
+      EntityType.Extension,
+      EntityType.Alias
+    );
   }
 
   visitTitle(ctx: pc.TitleContext): string {
@@ -381,7 +480,12 @@ export class FSHImporter extends FSHVisitor {
   }
 
   visitInstanceOf(ctx: pc.InstanceOfContext): string {
-    return this.aliasAwareValue(ctx.SEQUENCE().getText());
+    return this.normalizedValue(
+      ctx.SEQUENCE().getText(),
+      EntityType.Profile,
+      EntityType.Extension,
+      EntityType.Alias
+    );
   }
 
   visitSdRule(ctx: pc.SdRuleContext): Rule[] {
@@ -496,7 +600,11 @@ export class FSHImporter extends FSHVisitor {
     const vsRule = new ValueSetRule(this.visitPath(ctx.path()))
       .withLocation(this.extractStartStop(ctx))
       .withFile(this.currentFile);
-    vsRule.valueSet = this.aliasAwareValue(ctx.SEQUENCE().getText());
+    vsRule.valueSet = this.normalizedValue(
+      ctx.SEQUENCE().getText(),
+      EntityType.Alias,
+      EntityType.ValueSet
+    );
     vsRule.strength = ctx.strength() ? this.visitStrength(ctx.strength()) : 'required';
     return vsRule;
   }
@@ -581,7 +689,7 @@ export class FSHImporter extends FSHVisitor {
       .withLocation(this.extractStartStop(ctx))
       .withFile(this.currentFile);
     if (system && system.length > 0) {
-      concept.system = this.aliasAwareValue(system);
+      concept.system = this.normalizedValue(system, EntityType.Alias /*, EntityType.CodeSystem*/);
     }
     if (ctx.STRING()) {
       concept.display = this.extractString(ctx.STRING());
@@ -624,7 +732,8 @@ export class FSHImporter extends FSHVisitor {
 
   visitReference(ctx: pc.ReferenceContext): FshReference {
     const ref = new FshReference(
-      this.aliasAwareValue(this.parseReference(ctx.REFERENCE().getText())[0])
+      // Reference could technically be to near anything, so allow all types
+      this.normalizedValue(this.parseReference(ctx.REFERENCE().getText())[0])
     )
       .withLocation(this.extractStartStop(ctx))
       .withFile(this.currentFile);
@@ -655,10 +764,25 @@ export class FSHImporter extends FSHVisitor {
             .getText()
         );
         references.forEach(r =>
-          onlyRule.types.push({ type: this.aliasAwareValue(r), isReference: true })
+          onlyRule.types.push({
+            type: this.normalizedValue(
+              r,
+              EntityType.Alias,
+              EntityType.Profile,
+              EntityType.Extension
+            ),
+            isReference: true
+          })
         );
       } else {
-        onlyRule.types.push({ type: this.aliasAwareValue(t.SEQUENCE().getText()) });
+        onlyRule.types.push({
+          type: this.normalizedValue(
+            t.SEQUENCE().getText(),
+            EntityType.Alias,
+            EntityType.Profile,
+            EntityType.Extension
+          )
+        });
       }
     });
     return onlyRule;
@@ -931,8 +1055,18 @@ export class FSHImporter extends FSHVisitor {
     }
   }
 
-  private aliasAwareValue(value: string): string {
-    return this.allAliases.has(value) ? this.allAliases.get(value) : value;
+  private normalizedValue(value: string, ...types: EntityType[]): string {
+    if (types.length === 0) {
+      return this.preprocessedData.all.get(value) ?? value;
+    }
+    for (const type of types) {
+      const typeMap = this.preprocessedData.forType(type);
+      if (typeMap.has(value)) {
+        return typeMap.get(value);
+      }
+    }
+    // If we fell through, that means there was no match, so return back the value
+    return value;
   }
 
   private extractString(stringCtx: ParserRuleContext): string {

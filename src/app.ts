@@ -67,7 +67,7 @@ async function app() {
       return new RawFSH(fileContent, filePath);
     });
 
-  const docs = importText(rawFSHes);
+  const docs = importText(rawFSHes, config);
 
   const tank = new FSHTank(docs, config);
   await Promise.all(dependencyDefs);
