@@ -1711,6 +1711,14 @@ describe('importConfiguration', () => {
     });
   });
 
+  describe('#rendering', () => {
+    it('should import rendering as-is', () => {
+      minYAML.rendering = 'http://hl7.org/fhir/my/homepage';
+      const config = importConfiguration(minYAML, 'test-config.yaml');
+      expect(config.rendering).toBe('http://hl7.org/fhir/my/homepage');
+    });
+  });
+
   describe('#copyrightYear', () => {
     // some of these are a little redundant due to minimal-config, but that's OK
     it('should convert copyrightYear to a parameter', () => {

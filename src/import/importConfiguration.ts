@@ -142,6 +142,7 @@ export function importConfiguration(yaml: YAMLConfiguration | string, file: stri
     parameters: parseParameters(yaml, yaml.FSHOnly, file),
     templates: parseTemplates(yaml.templates, file),
     template: yaml.template,
+    rendering: yaml.rendering,
     menu: parseMenu(yaml.menu),
     history: parseHistory(yaml, file),
     indexPageContent: yaml.indexPageContent,

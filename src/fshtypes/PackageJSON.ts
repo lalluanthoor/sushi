@@ -11,18 +11,15 @@ export type PackageJSON = {
   url?: string;
   title?: string;
   description?: string;
+  fhirVersions?: string[];
   dependencies?: {
     [key: string]: string;
   };
-  keywords?: string[];
-  language?: string;
   author?: string;
-  maintainers?: [
-    {
-      name: string;
-      url: string;
-      email: string;
-    }
-  ];
+  maintainers?: {
+    name: string;
+    url?: string;
+    email?: string;
+  }[];
   license?: string;
 };

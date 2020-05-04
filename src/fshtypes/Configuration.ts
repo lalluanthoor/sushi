@@ -105,6 +105,9 @@ export type Configuration = {
   // To provide a custom ig.ini file, do not include this property and include an `ig.ini` file in ig-data.
   template?: string;
 
+  // The rendering property corresponds to IG.manifest.rendering, giving the location of a rendered IG
+  rendering?: string;
+
   // The menu property will be used to generate the input/menu.xml file. The menu is represented as
   // a simple structure where the YAML key is the menu item name and the value is the URL. The IG
   // publisher currently only supports one level deep on sub-menus. To provide a custom menu.xml

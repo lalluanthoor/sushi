@@ -136,6 +136,9 @@ export type YAMLConfiguration = {
   // To provide a custom ig.ini file, do not include this property and include an `ig.ini` file in ig-data.
   template?: string;
 
+  // The rendering property corresponds to IG.manifest.rendering, giving the location of a rendered IG
+  rendering?: string;
+
   // The following two lines correspond to items that used to be in ig.ini but were recently moved
   // to IG.definition.parameter. For consistency within this file, the names are represented using
   // camelcase, but if authors use the formal parameter names, SUSHI will recognize them as well.

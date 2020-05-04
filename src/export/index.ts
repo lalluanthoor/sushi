@@ -6,3 +6,4 @@ export * from './CodeSystemExporter';
 export * from './MappingExporter';
 export * from './exportFHIR';
 export * from './Package';
+export * from './PackageJSONExporter';
