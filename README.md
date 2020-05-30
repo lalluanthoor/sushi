@@ -1,4 +1,5 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/fhir/sushi/Lint%20and%20Test)
+[![codecov](https://codecov.io/gh/lalluanthoor/sushi/branch/master/graph/badge.svg)](https://codecov.io/gh/lalluanthoor/sushi)
 ![npm](https://img.shields.io/npm/v/fsh-sushi)
 ![dependabot](https://api.dependabot.com/badges/status?host=github&repo=lalluanthoor/sushi)
 
