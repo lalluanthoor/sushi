@@ -1,7 +1,9 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/fhir/sushi/Lint%20and%20Test)
 [![codecov](https://codecov.io/gh/lalluanthoor/sushi/branch/master/graph/badge.svg)](https://codecov.io/gh/lalluanthoor/sushi)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=lalluanthoor_sushi&metric=alert_status)](https://sonarcloud.io/dashboard?id=lalluanthoor_sushi)
 ![npm](https://img.shields.io/npm/v/fsh-sushi)
 ![dependabot](https://api.dependabot.com/badges/status?host=github&repo=lalluanthoor/sushi)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lalluanthoor_sushi&metric=security_rating)](https://sonarcloud.io/dashboard?id=lalluanthoor_sushi)
 
 # SUSHI (WORK IN PROGRESS)
 
