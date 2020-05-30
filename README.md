@@ -1,5 +1,6 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/fhir/sushi/Lint%20and%20Test)
 ![npm](https://img.shields.io/npm/v/fsh-sushi)
+![dependabot](https://api.dependabot.com/badges/status?host=github&repo=lalluanthoor/sushi)
 
 # SUSHI (WORK IN PROGRESS)
 
